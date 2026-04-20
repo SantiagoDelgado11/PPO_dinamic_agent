@@ -65,5 +65,3 @@ class PPOAgent(nn.Module):
         entropy = dist.entropy()
         return log_probs, entropy, values
 
-
-ReinforceAgent = PPOAgent

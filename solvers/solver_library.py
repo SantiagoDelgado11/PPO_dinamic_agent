@@ -49,7 +49,3 @@ class SolverLibrary:
     @property
     def action_dim(self) -> int:
         return len(self._action_to_solver)
-
-    @property
-    def solver_names(self) -> list[str]:
-        return [self._action_to_solver[idx].name for idx in range(self.action_dim)]

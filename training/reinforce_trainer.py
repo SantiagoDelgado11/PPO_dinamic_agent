@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 
-from agents.agent import PPOAgent, ReinforceAgent
+from agents.agent import PPOAgent
 from environment.diffusion_env import DiffusionSolverEnv, EpisodeSample
 from training.rollout import rollout_episode
 
@@ -139,11 +139,10 @@ class ReinforceTrainer:
         for episode in range(1, self.config.num_episodes + 1):
             sample: EpisodeSample = episode_sampler()
 
-            trajectory, _, info = rollout_episode(
+            trajectory, info = rollout_episode(
                 env=self.env,
                 agent=self.agent,
                 sample=sample,
-                gamma=self.config.gamma,
                 device=self.device,
             )
 

@@ -28,8 +28,6 @@ DEFAULT_DIFFPIR_NOISE_LEVEL = 0.0
 DEFAULT_DIFFPIR_ETA = 0.0
 DEFAULT_DIFFPIR_ZETA = 1.0
 
-SOLVER_NAMES = ["DDNM", "DPS", "DiffPIR"]
-
 
 def freeze_module(module: torch.nn.Module) -> torch.nn.Module:
     module.eval()

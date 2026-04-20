@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 from typing import Any
 
 import torch
@@ -16,13 +15,6 @@ def psnr_normalized(x_hat: torch.Tensor, x_true: torch.Tensor) -> float:
 
 def ssim_reward(x_hat: torch.Tensor, x_true: torch.Tensor) -> float:
     return float(reward_utils.ssim_reward(x_hat, x_true))
-
-
-def get_args():
-    parser = argparse.ArgumentParser(description="Diffusion RL Environment")
-    parser.add_argument("--max_steps", type=int, default=1000)
-    parser.add_argument("--device", type=str, default="cuda")
-    return parser.parse_args()
 
 
 class EpisodeSample:

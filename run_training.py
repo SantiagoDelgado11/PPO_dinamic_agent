@@ -18,6 +18,11 @@ patch_torchvision_fake_registration()
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 
+try:
+    import wandb
+except ImportError:
+    wandb = None
+
 from agents.agent import PPOAgent
 from environment.diffusion_env import DiffusionSolverEnv, EpisodeSample
 from environment.state_builder import StateBuilder
@@ -58,6 +63,28 @@ def build_backbone(args, device: torch.device) -> torch.nn.Module:
 
 
 def train(args) -> None:
+    wandb_run = None
+    if args.use_wandb:
+        if wandb is None:
+            raise ImportError("wandb no esta instalado. Instala con: pip install wandb")
+
+        if args.wandb_api_key:
+            os.environ["WANDB_API_KEY"] = args.wandb_api_key
+            wandb.login(key=args.wandb_api_key, relogin=True)
+        else:
+            wandb.login()
+
+        wandb_config = {k: v for k, v in vars(args).items() if k != "wandb_api_key"}
+        init_kwargs = {
+            "project": args.project_name,
+            "name": args.run_name,
+            "config": wandb_config,
+        }
+        if args.wandb_entity:
+            init_kwargs["entity"] = args.wandb_entity
+
+        wandb_run = wandb.init(**init_kwargs)
+
     set_seed(args.seed)
 
     use_cuda = torch.cuda.is_available() and str(args.device).startswith("cuda")
@@ -154,9 +181,6 @@ def train(args) -> None:
         x_true = images[0:1].to(device)
         x_true = x_true * 2.0 - 1.0
 
-        if str(args.sampling_method).lower() != "hadamard":
-            raise ValueError(f"Unsupported sampling_method='{args.sampling_method}'. Only 'hadamard' is supported.")
-
         operator = SPCModel(
             im_size=args.image_size,
             compression_ratio=args.sampling_ratio,
@@ -169,6 +193,11 @@ def train(args) -> None:
         )
 
     logs = trainer.train(sample_episode)
+
+    if args.use_wandb and wandb_run is not None:
+        for entry in logs:
+            wandb.log(entry, step=int(entry.get("episode", 0)))
+
     rewards = [entry["reward"] for entry in logs]
 
     print("Training finished.")
@@ -177,9 +206,16 @@ def train(args) -> None:
         print(f"Average Reward: {np.mean(rewards):.4f}")
         print(f"Best Reward: {np.max(rewards):.4f}")
         print(f"Best agent checkpoint: {Path(args.checkpoint_dir) / 'best_agent.pt'}")
+
+        if args.use_wandb and wandb_run is not None:
+            wandb_run.summary["average_reward"] = float(np.mean(rewards))
+            wandb_run.summary["best_reward"] = float(np.max(rewards))
     else:
         print("Average Reward: n/a (no valid episodes logged)")
         print("Best Reward: n/a (no valid episodes logged)")
+
+    if args.use_wandb and wandb_run is not None:
+        wandb.finish()
 
 
 def parse_args():
@@ -222,7 +258,7 @@ def parse_args():
     parser.add_argument("--checkpoint_every", type=int, default=25)
 
     parser.add_argument("--sampling_ratio", type=float, default=0.5)
-    parser.add_argument("--sampling_method", type=str, default="hadamard")
+    parser.add_argument("--sampling_method", type=str, default="hadamard", choices=["hadamard"])
     parser.add_argument("--measurement_noise_std", type=float, default=0.0)
     parser.add_argument("--reward_psnr_weight", type=float, default=0.8)
     parser.add_argument("--reward_ssim_weight", type=float, default=0.2)
@@ -244,6 +280,20 @@ def parse_args():
     parser.add_argument("--noise_level_img", type=float, default=0.0)
     parser.add_argument("--diffpir_eta", type=float, default=0.0)
     parser.add_argument("--diffpir_zeta", type=float, default=1.0)
+
+    parser.add_argument(
+        "--use_wandb",
+        type=lambda x: str(x).lower() in ["1", "true", "yes", "y"],
+        default=True,
+    )
+    parser.add_argument(
+        "--wandb_api_key",
+        type=str,
+        default="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",
+    )
+    parser.add_argument("--project_name", type=str, default="PPO_dinamic_agent")
+    parser.add_argument("--run_name", type=str, default="run_training_ppo")
+    parser.add_argument("--wandb_entity", type=str, default="")
 
     return parser.parse_args()
 
