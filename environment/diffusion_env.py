@@ -24,11 +24,9 @@ class EpisodeSample:
         self,
         x_true: torch.Tensor,
         H: Any,
-        noise_std: float = 0.0,
     ) -> None:
         self.x_true = x_true
         self.H = H
-        self.noise_std = noise_std
 
 
 class ModelDomainOperator:
@@ -110,11 +108,8 @@ class DiffusionSolverEnv:
             previous_consistency=self.previous_consistency,
         )
 
-    def _build_measurement(self, x_true: torch.Tensor, H: Any, noise_std: float) -> torch.Tensor:
-        measurement = H.forward_pass(x_true)
-        if noise_std > 0.0:
-            measurement = measurement + noise_std * torch.randn_like(measurement)
-        return measurement
+    def _build_measurement(self, x_true: torch.Tensor, H: Any) -> torch.Tensor:
+        return H.forward_pass(x_true)
 
     def _compute_consistency_mse(self, x_estimate: torch.Tensor) -> float:
         if self.current_sample is None or self.y is None:
@@ -129,7 +124,7 @@ class DiffusionSolverEnv:
         self.previous_action = 0
 
         self.operator_model_domain = ModelDomainOperator(sample.H)
-        self.y = self._build_measurement(sample.x_true.to(self.device), sample.H, sample.noise_std).to(self.device)
+        self.y = self._build_measurement(sample.x_true.to(self.device), sample.H).to(self.device)
 
         self.x_current = torch.randn_like(sample.x_true, device=self.device)
         self.x_estimate = torch.clamp(sample.H.transpose_pass(self.y).detach().to(self.device), -1.0, 1.0)

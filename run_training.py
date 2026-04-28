@@ -190,7 +190,6 @@ def train(args) -> None:
         return EpisodeSample(
             x_true=x_true,
             H=operator,
-            noise_std=args.measurement_noise_std,
         )
 
     logs = trainer.train(sample_episode)
@@ -261,7 +260,6 @@ def parse_args():
 
     parser.add_argument("--sampling_ratio", type=float, default=0.5)
     parser.add_argument("--sampling_method", type=str, default="hadamard", choices=["hadamard"])
-    parser.add_argument("--measurement_noise_std", type=float, default=0.0)
     parser.add_argument("--reward_psnr_weight", type=float, default=0.9)
     parser.add_argument("--reward_ssim_weight", type=float, default=0.1)
     parser.add_argument(
