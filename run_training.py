@@ -163,9 +163,15 @@ def train(args) -> None:
             gae_lambda=args.gae_lambda,
             ppo_value_clip_eps=args.ppo_value_clip_eps,
             target_kl=args.target_kl,
+            episodes_per_update=args.episodes_per_update,
         ),
         device=device,
     )
+
+    operator = SPCModel(
+        im_size=args.image_size,
+        compression_ratio=args.sampling_ratio,
+    ).to(device)
 
     data_iter = iter(dataloader)
 
@@ -180,11 +186,6 @@ def train(args) -> None:
         images, _ = batch
         x_true = images[0:1].to(device)
         x_true = x_true * 2.0 - 1.0
-
-        operator = SPCModel(
-            im_size=args.image_size,
-            compression_ratio=args.sampling_ratio,
-        ).to(device)
 
         return EpisodeSample(
             x_true=x_true,
@@ -237,7 +238,7 @@ def parse_args():
 
     parser.add_argument("--num_episodes", type=int, default=256)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--gamma", type=float, default=1.0)
+    parser.add_argument("--gamma", type=float, default=0.995)
     parser.add_argument("--gae_lambda", type=float, default=0.98)
     parser.add_argument("--value_coef", type=float, default=0.5)
     parser.add_argument("--entropy_coef", type=float, default=0.01)
@@ -253,6 +254,7 @@ def parse_args():
     parser.add_argument("--ppo_clip_eps", type=float, default=0.2)
     parser.add_argument("--ppo_value_clip_eps", type=float, default=0.2)
     parser.add_argument("--ppo_update_epochs", type=int, default=4)
+    parser.add_argument("--episodes_per_update", type=int, default=4)
     parser.add_argument("--target_kl", type=float, default=0.03)
     parser.add_argument("--checkpoint_dir", type=str, default=DEFAULT_PPO_CHECKPOINT_DIR)
     parser.add_argument("--checkpoint_every", type=int, default=25)
@@ -260,8 +262,8 @@ def parse_args():
     parser.add_argument("--sampling_ratio", type=float, default=0.5)
     parser.add_argument("--sampling_method", type=str, default="hadamard", choices=["hadamard"])
     parser.add_argument("--measurement_noise_std", type=float, default=0.0)
-    parser.add_argument("--reward_psnr_weight", type=float, default=0.8)
-    parser.add_argument("--reward_ssim_weight", type=float, default=0.2)
+    parser.add_argument("--reward_psnr_weight", type=float, default=0.9)
+    parser.add_argument("--reward_ssim_weight", type=float, default=0.1)
     parser.add_argument(
         "--use_ssim_in_reward",
         type=lambda x: str(x).lower() in ["1", "true", "yes", "y"],

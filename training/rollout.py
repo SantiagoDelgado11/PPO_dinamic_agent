@@ -39,7 +39,8 @@ def rollout_episode(
     info = {}
 
     while not done:
-        policy_step = agent.select_action(state.unsqueeze(0))
+        with torch.no_grad():
+            policy_step = agent.select_action(state.unsqueeze(0))
 
         next_state, reward, done, info = env.step(policy_step.action)
 

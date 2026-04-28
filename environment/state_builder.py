@@ -8,8 +8,8 @@ class StateBuilder:
 
     def __init__(self, args=None) -> None:
         self.eps = float(getattr(args, "eps", 1e-8))
-        self.state_clip = float(getattr(args, "state_clip", 1.0))
-        self.log_scale = float(getattr(args, "log_scale", 6.0))
+        self.state_clip = float(getattr(args, "state_clip", 1.5))
+        self.log_scale = float(getattr(args, "log_scale", 8.0))
         self.state_dim = 13
 
     def _signed_log1p(self, value: torch.Tensor) -> torch.Tensor:
@@ -17,7 +17,7 @@ class StateBuilder:
 
     def _bounded_log_feature(self, value: torch.Tensor) -> torch.Tensor:
         scaled = self._signed_log1p(value) / self.log_scale
-        return torch.clamp(scaled, -1.0, 1.0)
+        return torch.clamp(scaled, -self.state_clip, self.state_clip)
 
     def _normalize_action(self, previous_action: int, action_count: int, device: torch.device) -> torch.Tensor:
         if action_count <= 1:
@@ -91,12 +91,12 @@ class StateBuilder:
                 self._bounded_log_feature(spatial_variance),
                 self._bounded_log_feature(latent_energy),
                 torch.tanh(convergence_ratio),
-                torch.clamp(cosine_alignment, -1.0, 1.0),
+                torch.clamp(cosine_alignment, -self.state_clip, self.state_clip),
                 self._bounded_log_feature(residual_to_signal),
-                torch.clamp(normalized_iteration, -1.0, 1.0),
-                torch.clamp(normalized_timestep, -1.0, 1.0),
-                torch.clamp(previous_action_feature, -1.0, 1.0),
-                torch.clamp(previous_consistency_feature, -1.0, 1.0),
+                torch.clamp(normalized_iteration, -self.state_clip, self.state_clip),
+                torch.clamp(normalized_timestep, -self.state_clip, self.state_clip),
+                torch.clamp(previous_action_feature, -self.state_clip, self.state_clip),
+                torch.clamp(previous_consistency_feature, -self.state_clip, self.state_clip),
             ]
         ).float()
 
