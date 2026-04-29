@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
+import math
 
 from environment import reward as reward_utils
 from environment.state_builder import StateBuilder
@@ -59,6 +60,10 @@ class DiffusionSolverEnv:
         psnr_reward_weight: float = 1.0,
         ssim_reward_weight: float = 0.0,
         use_ssim_in_reward: bool = False,
+        consistency_reward_weight: float = 0.1,
+        action_switch_penalty: float = 0.01,
+        final_quality_weight: float = 0.05,
+        reward_clip: float = 1.0,
         verbose: bool = False,
         args=None,
     ) -> None:
@@ -77,6 +82,10 @@ class DiffusionSolverEnv:
         self.psnr_reward_weight = float(psnr_reward_weight)
         self.ssim_reward_weight = float(ssim_reward_weight)
         self.use_ssim_in_reward = bool(use_ssim_in_reward)
+        self.consistency_reward_weight = float(consistency_reward_weight)
+        self.action_switch_penalty = max(0.0, float(action_switch_penalty))
+        self.final_quality_weight = max(0.0, float(final_quality_weight))
+        self.reward_clip = max(1e-6, float(reward_clip))
 
         self.iteration = 0
         self.current_timestep = self.max_steps - 1
@@ -88,6 +97,7 @@ class DiffusionSolverEnv:
         self.x_previous_estimate: torch.Tensor | None = None
         self.operator_model_domain: ModelDomainOperator | None = None
         self.previous_consistency = 0.0
+        self.previous_consistency_delta = 0.0
 
     def _build_state(self) -> torch.Tensor:
         if self.y is None or self.operator_model_domain is None or self.x_current is None or self.x_estimate is None:
@@ -106,6 +116,7 @@ class DiffusionSolverEnv:
             previous_action=self.previous_action,
             action_count=self.solver_library.action_dim,
             previous_consistency=self.previous_consistency,
+            previous_consistency_delta=self.previous_consistency_delta,
         )
 
     def _build_measurement(self, x_true: torch.Tensor, H: Any) -> torch.Tensor:
@@ -130,8 +141,25 @@ class DiffusionSolverEnv:
         self.x_estimate = torch.clamp(sample.H.transpose_pass(self.y).detach().to(self.device), -1.0, 1.0)
         self.x_previous_estimate = None
         self.previous_consistency = self._compute_consistency_mse(self.x_estimate)
+        self.previous_consistency_delta = 0.0
 
         return self._build_state()
+
+    def _quality_reward(self, delta_psnr_norm: float, delta_ssim: float) -> float:
+        if not self.use_ssim_in_reward:
+            return float(delta_psnr_norm)
+
+        w_psnr = max(0.0, self.psnr_reward_weight)
+        w_ssim = max(0.0, self.ssim_reward_weight)
+        denom = w_psnr + w_ssim
+        if denom <= 0.0:
+            w_psnr, w_ssim, denom = 1.0, 0.0, 1.0
+        return float((w_psnr * delta_psnr_norm + w_ssim * delta_ssim) / denom)
+
+    def _consistency_reward(self, prev_consistency: float, next_consistency: float) -> float:
+        prev_log = math.log1p(max(prev_consistency, 0.0))
+        next_log = math.log1p(max(next_consistency, 0.0))
+        return float(math.tanh(prev_log - next_log))
 
     def step(self, action: int) -> tuple[torch.Tensor, float, bool, dict[str, Any]]:
         if (
@@ -165,27 +193,35 @@ class DiffusionSolverEnv:
         delta_psnr_norm = next_psnr_norm - prev_psnr_norm
         delta_ssim = next_ssim - prev_ssim
 
-        if self.use_ssim_in_reward:
-            w_psnr = max(0.0, self.psnr_reward_weight)
-            w_ssim = max(0.0, self.ssim_reward_weight)
-            denom = w_psnr + w_ssim
-            if denom <= 0.0:
-                w_psnr, w_ssim, denom = 1.0, 0.0, 1.0
-            reward = float((w_psnr * delta_psnr_norm + w_ssim * delta_ssim) / denom)
-        else:
-            reward = float(delta_psnr_norm)
-        reward = float(max(-1.0, min(1.0, reward)))
+        consistency = self._compute_consistency_mse(next_estimate)
+        consistency_component = self._consistency_reward(self.previous_consistency, consistency)
+        switch_penalty = (
+            self.action_switch_penalty
+            if self.iteration > 0 and int(action) != int(self.previous_action)
+            else 0.0
+        )
+        reward = (
+            self._quality_reward(delta_psnr_norm=delta_psnr_norm, delta_ssim=delta_ssim)
+            + self.consistency_reward_weight * consistency_component
+            - switch_penalty
+        )
 
         self.x_previous_estimate = previous_estimate
         self.x_current = next_latent
         self.x_estimate = next_estimate
         self.previous_action = int(action)
-        consistency = self._compute_consistency_mse(self.x_estimate)
+        self.previous_consistency_delta = consistency_component
         self.previous_consistency = consistency
 
         self.iteration += 1
         self.current_timestep -= 1
         done = self.iteration >= self.max_steps
+        if done and self.final_quality_weight > 0.0:
+            reward += self.final_quality_weight * self._quality_reward(
+                delta_psnr_norm=next_psnr_norm,
+                delta_ssim=next_ssim,
+            )
+        reward = float(max(-self.reward_clip, min(self.reward_clip, reward)))
 
         if self.verbose:
             print(
@@ -212,6 +248,8 @@ class DiffusionSolverEnv:
             "ssim_delta": delta_ssim,
             "psnr_component": next_psnr_norm,
             "consistency": consistency,
+            "consistency_delta": consistency_component,
+            "action_switch_penalty": switch_penalty,
             "timestep": max(self.current_timestep, -1),
             **step_result.info,
         }

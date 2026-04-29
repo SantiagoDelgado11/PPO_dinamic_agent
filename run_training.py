@@ -130,6 +130,10 @@ def train(args) -> None:
         psnr_reward_weight=args.reward_psnr_weight,
         ssim_reward_weight=args.reward_ssim_weight,
         use_ssim_in_reward=args.use_ssim_in_reward,
+        consistency_reward_weight=args.reward_consistency_weight,
+        action_switch_penalty=args.action_switch_penalty,
+        final_quality_weight=args.final_quality_weight,
+        reward_clip=args.reward_clip,
         verbose=args.env_verbose,
     )
 
@@ -140,6 +144,9 @@ def train(args) -> None:
         entropy_coef=args.entropy_coef,
         logit_temperature=args.logit_temperature,
         hidden_dim=args.policy_hidden_dim,
+        hidden_layers=args.policy_hidden_layers,
+        activation=args.policy_activation,
+        dropout=args.policy_dropout,
     ).to(device)
 
     trainer = PPOTrainer(
@@ -150,6 +157,7 @@ def train(args) -> None:
             gamma=args.gamma,
             learning_rate=args.learning_rate,
             weight_decay=args.weight_decay,
+            optimizer=args.optimizer,
             grad_clip_norm=args.grad_clip_norm,
             grad_explosion_threshold=args.grad_explosion_threshold,
             checkpoint_dir=args.checkpoint_dir,
@@ -243,7 +251,11 @@ def parse_args():
     parser.add_argument("--entropy_coef", type=float, default=0.01)
     parser.add_argument("--logit_temperature", type=float, default=1.0)
     parser.add_argument("--policy_hidden_dim", type=int, default=DEFAULT_POLICY_HIDDEN_DIM)
+    parser.add_argument("--policy_hidden_layers", type=int, default=3)
+    parser.add_argument("--policy_activation", type=str, default="silu", choices=["silu", "gelu", "relu", "tanh"])
+    parser.add_argument("--policy_dropout", type=float, default=0.0)
     parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--optimizer", type=str, default="adamw", choices=["adamw", "adam", "rmsprop"])
     parser.add_argument("--grad_clip_norm", type=float, default=1.0)
     parser.add_argument("--grad_explosion_threshold", type=float, default=10.0)
     parser.add_argument("--returns_norm_momentum", type=float, default=0.99)
@@ -262,6 +274,10 @@ def parse_args():
     parser.add_argument("--sampling_method", type=str, default="hadamard", choices=["hadamard"])
     parser.add_argument("--reward_psnr_weight", type=float, default=0.9)
     parser.add_argument("--reward_ssim_weight", type=float, default=0.1)
+    parser.add_argument("--reward_consistency_weight", type=float, default=0.1)
+    parser.add_argument("--action_switch_penalty", type=float, default=0.01)
+    parser.add_argument("--final_quality_weight", type=float, default=0.05)
+    parser.add_argument("--reward_clip", type=float, default=1.0)
     parser.add_argument(
         "--use_ssim_in_reward",
         type=lambda x: str(x).lower() in ["1", "true", "yes", "y"],

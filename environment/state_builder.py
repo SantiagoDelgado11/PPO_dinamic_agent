@@ -10,7 +10,7 @@ class StateBuilder:
         self.eps = float(getattr(args, "eps", 1e-8))
         self.state_clip = float(getattr(args, "state_clip", 1.5))
         self.log_scale = float(getattr(args, "log_scale", 8.0))
-        self.state_dim = 13
+        self.state_dim = 16
 
     def _signed_log1p(self, value: torch.Tensor) -> torch.Tensor:
         return torch.sign(value) * torch.log1p(value.abs())
@@ -39,6 +39,7 @@ class StateBuilder:
         previous_action: int,
         action_count: int,
         previous_consistency: float,
+        previous_consistency_delta: float = 0.0,
     ) -> torch.Tensor:
         device = x_estimate.device
         eps = self.eps
@@ -81,6 +82,13 @@ class StateBuilder:
         previous_consistency_feature = self._bounded_log_feature(
             torch.tensor(previous_consistency, dtype=torch.float32, device=device)
         )
+        consistency_delta_feature = torch.tanh(
+            torch.tensor(previous_consistency_delta, dtype=torch.float32, device=device)
+        )
+        latent_estimate_mse = torch.mean((x_latent - x_estimate).square())
+        estimate_delta_energy = torch.tensor(0.0, dtype=torch.float32, device=device)
+        if previous_estimate is not None:
+            estimate_delta_energy = torch.mean((x_estimate - previous_estimate).square())
 
         features = torch.stack(
             [
@@ -97,6 +105,9 @@ class StateBuilder:
                 torch.clamp(normalized_timestep, -self.state_clip, self.state_clip),
                 torch.clamp(previous_action_feature, -self.state_clip, self.state_clip),
                 torch.clamp(previous_consistency_feature, -self.state_clip, self.state_clip),
+                torch.clamp(consistency_delta_feature, -self.state_clip, self.state_clip),
+                self._bounded_log_feature(latent_estimate_mse),
+                self._bounded_log_feature(estimate_delta_energy),
             ]
         ).float()
 

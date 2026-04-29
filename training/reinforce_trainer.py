@@ -21,6 +21,7 @@ class ReinforceTrainerConfig:
     gamma: float = 1.0
     learning_rate: float = 1e-4
     weight_decay: float = 0.0
+    optimizer: str = "adamw"
     grad_clip_norm: float = 1.0
     grad_explosion_threshold: float = 10.0
     checkpoint_dir: str = "weights/ppo_solver_selector"
@@ -56,11 +57,27 @@ class ReinforceTrainer:
         self.config = config
         self.device = torch.device(device)
 
-        self.optimizer = optim.Adam(
-            self.agent.parameters(),
-            lr=config.learning_rate,
-            weight_decay=config.weight_decay,
-        )
+        optimizer_name = config.optimizer.lower()
+        if optimizer_name == "rmsprop":
+            self.optimizer = optim.RMSprop(
+                self.agent.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+                alpha=0.99,
+                eps=config.eps,
+            )
+        elif optimizer_name == "adam":
+            self.optimizer = optim.Adam(
+                self.agent.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+            )
+        else:
+            self.optimizer = optim.AdamW(
+                self.agent.parameters(),
+                lr=config.learning_rate,
+                weight_decay=config.weight_decay,
+            )
         self._running_return_mean = 0.0
         self._running_return_var = 1.0
         self._best_reward = float("-inf")
@@ -187,6 +204,8 @@ class ReinforceTrainer:
                     "psnr_norm": psnr_norm,
                     "ssim": float(info.get("ssim", 0.0)),
                     "consistency": float(info.get("consistency", 0.0)),
+                    "consistency_delta": float(info.get("consistency_delta", 0.0)),
+                    "action_switch_penalty": float(info.get("action_switch_penalty", 0.0)),
                 }
             )
 
@@ -352,6 +371,7 @@ class ReinforceTrainer:
                         f"psnr_norm={episode_log['psnr_norm']:.3f} "
                         f"ssim={episode_log['ssim']:.3f} "
                         f"consistency={episode_log['consistency']:.6f} "
+                        f"cons_delta={episode_log['consistency_delta']:.3f} "
                         f"loss={episode_log['loss_total']:.4f}"
                     )
 

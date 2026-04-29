@@ -26,9 +26,19 @@ class PPOAgent(nn.Module):
         entropy_coef: float = 0.01,
         logit_temperature: float = 1.0,
         hidden_dim: int = 256,
+        hidden_layers: int = 3,
+        activation: str = "silu",
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
-        self.network = PolicyNetwork(state_dim=state_dim, action_dim=action_dim, hidden_dim=hidden_dim)
+        self.network = PolicyNetwork(
+            state_dim=state_dim,
+            action_dim=action_dim,
+            hidden_dim=hidden_dim,
+            hidden_layers=hidden_layers,
+            activation=activation,
+            dropout=dropout,
+        )
 
         self.value_coef = float(value_coef)
         self.entropy_coef = float(entropy_coef)
