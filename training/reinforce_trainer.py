@@ -17,7 +17,7 @@ from training.rollout import Trajectory, rollout_episode
 class ReinforceTrainerConfig:
     """Configuration for PPO actor-critic training."""
 
-    num_episodes: int = 256
+    num_episodes: int = 1000
     gamma: float = 1.0
     learning_rate: float = 1e-4
     weight_decay: float = 0.0

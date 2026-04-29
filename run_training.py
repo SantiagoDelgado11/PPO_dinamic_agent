@@ -235,7 +235,7 @@ def parse_args():
     parser.add_argument("--num_res_blocks", type=int, default=3)
     parser.add_argument("--diffusion_steps", type=int, default=DEFAULT_DIFFUSION_STEPS)
 
-    parser.add_argument("--num_episodes", type=int, default=256)
+    parser.add_argument("--num_episodes", type=int, default=1000)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--gamma", type=float, default=0.995)
     parser.add_argument("--gae_lambda", type=float, default=0.98)
